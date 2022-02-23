@@ -1,0 +1,7 @@
+# docker compose criado para sobrescrever e corrigir a variavel de ambiente
+# com o nome do banco
+version: '3'
+services: 
+    app:
+        environment: 
+            - DB_NAME=email_sender

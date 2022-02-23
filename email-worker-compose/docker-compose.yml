@@ -1,0 +1,87 @@
+version: '3'
+volumes: 
+    dados:
+networks: 
+    web:
+    banco:
+    fila:
+services: 
+    db:
+        image: postgres:9.6
+        volumes: 
+            # volume de dados
+            - dados:/var/lib/postgresql/data
+            # scripts
+            - ./scripts:/scripts
+            - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+        networks:
+            - banco
+    frontend:
+        image: nginx:1.13
+        volumes:
+            # site
+            - ./web:/usr/share/nginx/html/
+            # configuracao do proxy reverso
+            - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+        ports:
+            - 80:80
+        networks: 
+            - web
+        depends_on: 
+            - app
+    app:
+        image: python:3.6
+        volumes:
+            # aplicacao
+            - ./app:/app
+        working_dir: /app
+        # precisa do bash para ter a permissao de execucao
+        command: bash ./app.sh
+        # com o proxy reverso nao precisa mais compartilhar essa porta
+        #ports:
+        #    - 8080:8080
+        networks: 
+            - web
+            - banco
+            - fila
+        depends_on: 
+            - db
+            - queue
+        environment: 
+            # - DB_NAME=email_sender
+            # definindo com erro para demonstrar que o overrided sobrescre
+            - DB_NAME=abc_sender
+    queue:
+        image: redis:3.2
+        networks: 
+            - fila
+    worker:
+        # a imagem precisou ser modificada, passando a user a configuracao do Dockerfile
+        # image: python:3.6
+        # vai procurar dentro da pasta worker o Dockerfile
+        build: worker
+        volumes:
+            # worker
+            - ./worker:/worker
+        working_dir: /worker
+        # devido a mudança no uso da imagem (mais de uma instancia do worker)
+        # command: bash ./app.sh
+        command: worker.py
+        networks: 
+            - fila
+        depends_on: 
+            - queue
+
+
+# rodar no modo daemon
+# docker-compose up -d     
+# docker-compose -ps (listando os em execucao)
+# executando comando no serviço db. Ex. listando os bancos existentes
+# docker-compose exec db psql -U postgres -c '\l'
+# encerrar
+# docker-compose down
+# docker-compose exec db psql -U postgres -f /scripts/check.sql
+# docker-compose logs -f -t
+# subindo 3 instancias do servico worker
+# docker-compose up -d --scale worker=3
+# docker-compose logs -f -t worker
